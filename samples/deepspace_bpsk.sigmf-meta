@@ -1,0 +1,12 @@
+{
+  "global": {
+    "core:datatype": "ci16_le",
+    "core:sample_rate": 2000000,
+    "core:description": "Deep Space Telemetry BPSK Downlink"
+  },
+  "captures": [
+    {
+      "core:frequency": 8450000000
+    }
+  ]
+}

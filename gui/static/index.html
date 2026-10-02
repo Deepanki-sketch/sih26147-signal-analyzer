@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NTRO | Automated .IQ & .WAV Signal Analyzer (SIH26147)</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="ntro-badge">
+        <span class="badge-icon">📡</span>
+        <div class="badge-text">
+          <span class="agency-title">NATIONAL TECHNICAL RESEARCH ORGANISATION (NTRO)</span>
+          <span class="ps-subtitle">PS SIH26147 • Space Technology • Automated .IQ / .WAV Signal Analyzer</span>
+        </div>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="status-pill online">
+        <span class="status-dot"></span>
+        <span>DSP ENGINE ACTIVE (NUMPY/SCIPY 64-BIT)</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-secondary" id="btn-open-synthetic">⚡ Synthesize Test RF</button>
+      <button class="btn btn-secondary" id="btn-open-upload">📂 Ingest .IQ / .WAV</button>
+      <button class="btn btn-primary" id="btn-run-pipeline">▶ Auto-Analyze</button>
+      <button class="btn btn-outline" id="btn-export-json">💾 Export Report</button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-layout">
+    <!-- Quick Telemetry Ribbon -->
+    <section class="telemetry-ribbon">
+      <div class="card metric-card mod-card">
+        <div class="card-label">CLASSIFIED MODULATION</div>
+        <div class="metric-value" id="val-modulation">--</div>
+        <div class="metric-sub">
+          <span>CONFIDENCE: </span>
+          <strong id="val-confidence">--%</strong>
+          <div class="confidence-bar-bg">
+            <div class="confidence-bar-fill" id="bar-confidence" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card metric-card">
+        <div class="card-label">BAUD / SYMBOL RATE</div>
+        <div class="metric-value" id="val-baud">-- <small>Baud</small></div>
+        <div class="metric-sub">SPS: <span id="val-sps">--</span> • Fs: <span id="val-fs">--</span></div>
+      </div>
+
+      <div class="card metric-card">
+        <div class="card-label">CARRIER FREQ OFFSET (CFO)</div>
+        <div class="metric-value" id="val-cfo">-- <small>Hz</small></div>
+        <div class="metric-sub">STATUS: <span id="val-cfo-status">DE-ROTATED</span></div>
+      </div>
+
+      <div class="card metric-card">
+        <div class="card-label">ESTIMATED SNR (M₂M₄)</div>
+        <div class="metric-value" id="val-snr">-- <small>dB</small></div>
+        <div class="metric-sub">QUALITY: <span id="val-snr-quality">--</span></div>
+      </div>
+
+      <div class="card metric-card">
+        <div class="card-label">OCCUPIED BANDWIDTH (99%)</div>
+        <div class="metric-value" id="val-obw">-- <small>kHz</small></div>
+        <div class="metric-sub">3dB BW: <span id="val-bw3db">-- kHz</span></div>
+      </div>
+
+      <div class="card metric-card">
+        <div class="card-label">FRAME SYNCHRONIZATION</div>
+        <div class="metric-value" id="val-preamble">--</div>
+        <div class="metric-sub">FRAMES: <span id="val-frame-count">0</span> • ENTROPY: <span id="val-entropy">--</span></div>
+      </div>
+    </section>
+
+    <!-- Visualizers Grid (4 Canvases) -->
+    <section class="visuals-grid">
+      <!-- 1. Waterfall Display -->
+      <div class="card visual-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="icon">🌊</span> TIME-FREQUENCY WATERFALL (SPECTROGRAM)
+          </div>
+          <div class="panel-controls">
+            <label>COLORMAP:
+              <select id="select-colormap">
+                <option value="turbo">Turbo (RF Standard)</option>
+                <option value="viridis">Viridis</option>
+                <option value="inferno">Inferno</option>
+                <option value="cyan">Radar Cyan</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="canvas-container">
+          <canvas id="canvas-waterfall"></canvas>
+          <div class="canvas-overlay-labels">
+            <span class="left-label">t = 0 ms</span>
+            <span class="bottom-center">-Fs/2 ← FREQUENCY → +Fs/2</span>
+            <span class="right-label" id="wf-depth-label">Depth: 80 slices</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Power Spectral Density (PSD) -->
+      <div class="card visual-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="icon">📈</span> POWER SPECTRAL DENSITY (PSD / FFT)
+          </div>
+          <div class="panel-controls">
+            <span class="badge" id="badge-cfo-marker">CFO: 0 Hz</span>
+          </div>
+        </div>
+        <div class="canvas-container">
+          <canvas id="canvas-psd"></canvas>
+        </div>
+      </div>
+
+      <!-- 3. Constellation Diagram -->
+      <div class="card visual-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="icon">🎯</span> CONSTELLATION DIAGRAM (I vs Q)
+          </div>
+          <div class="panel-controls">
+            <label><input type="checkbox" id="check-ideal-grid" checked> Ideal Slices</label>
+            <label><input type="checkbox" id="check-persistence" checked> Persistence Glow</label>
+          </div>
+        </div>
+        <div class="canvas-container">
+          <canvas id="canvas-constellation"></canvas>
+        </div>
+      </div>
+
+      <!-- 4. Time Domain / Eye Diagram -->
+      <div class="card visual-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="icon">⏱️</span> TIME DOMAIN WAVEFORM & EYE DIAGRAM
+          </div>
+          <div class="panel-controls">
+            <button class="btn-sm active" id="btn-toggle-time">I(t) & Q(t)</button>
+            <button class="btn-sm" id="btn-toggle-eye">Eye Diagram</button>
+          </div>
+        </div>
+        <div class="canvas-container">
+          <canvas id="canvas-timedomain"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Deep-Dive Intelligence Tabs -->
+    <section class="card pipeline-details-card">
+      <div class="tabs-header">
+        <button class="tab-btn active" data-tab="tab-amc">1. AMC & Higher-Order Cumulants</button>
+        <button class="tab-btn" data-tab="tab-demod">2. Demodulator & Bits</button>
+        <button class="tab-btn" data-tab="tab-interleave">3. De-Interleaver Engine</button>
+        <button class="tab-btn" data-tab="tab-fec">4. FEC Error Correction</button>
+        <button class="tab-btn" data-tab="tab-framing">5. Frame Correlation & Payload Hex</button>
+      </div>
+
+      <!-- Tab 1: AMC Details -->
+      <div class="tab-content active" id="tab-amc">
+        <div class="grid-2-col">
+          <div class="table-container">
+            <h4>Extracted Higher-Order Cumulants & Azzouz-Nandi Features</h4>
+            <table class="data-table">
+              <thead>
+                <tr><th>Metric / Feature</th><th>Extracted Value</th><th>Expected Signature</th><th>Description</th></tr>
+              </thead>
+              <tbody id="amc-features-tbody">
+                <tr><td>C₂₀</td><td>--</td><td>1.0 (BPSK), 0.0 (QPSK/QAM)</td><td>2nd order complex conjugate moment</td></tr>
+                <tr><td>C₄₀</td><td>--</td><td>1.6 (BPSK), 0.8 (QPSK), 0.5 (QAM)</td><td>4th order zero-lag cumulant</td></tr>
+                <tr><td>C₄₂</td><td>--</td><td>1.6 (BPSK), 0.8 (QPSK), 0.5 (QAM)</td><td>4th order absolute power cumulant</td></tr>
+                <tr><td>γ_max</td><td>--</td><td>High (ASK/BPSK), Low (CW/FSK)</td><td>Max normalized amplitude spectral peak</td></tr>
+                <tr><td>σ_aa</td><td>--</td><td>&lt;0.1 (PSK/FSK), &gt;0.35 (QAM)</td><td>Std dev of absolute normalized amplitude</td></tr>
+                <tr><td>σ_af</td><td>--</td><td>High (FSK), Low (PSK/QAM)</td><td>Std dev of instantaneous frequency</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="amc-prob-container">
+            <h4>Modulation Class Likelihood Distribution</h4>
+            <div id="amc-prob-bars" class="prob-bars-list">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Demodulator -->
+      <div class="tab-content" id="tab-demod">
+        <div class="grid-2-col">
+          <div>
+            <h4>Demodulation Pipeline Status</h4>
+            <ul class="meta-list" id="demod-meta-list">
+              <li>Active Engine: <strong id="demod-engine-name">--</strong></li>
+              <li>Recovered Symbols: <strong id="demod-symbols-count">--</strong></li>
+              <li>Recovered Raw Bits: <strong id="demod-bits-count">--</strong></li>
+              <li>Carrier Phase Recovery: <strong>Costas Loop (Decision-Directed)</strong></li>
+              <li>Timing Synchronization: <strong>Gardner Timing Error Detector</strong></li>
+            </ul>
+          </div>
+          <div>
+            <h4>Recovered Bit Stream Snippet</h4>
+            <div class="binary-grid" id="demod-bits-preview">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: De-Interleaving -->
+      <div class="tab-content" id="tab-interleave">
+        <div class="grid-2-col">
+          <div>
+            <h4>Interleaving Recognition & Control</h4>
+            <div class="form-row">
+              <label>Select Interleaver Scheme:
+                <select id="cfg-interleaver">
+                  <option value="none">None / Bypass</option>
+                  <option value="auto">Auto-Detect Period (Autocorrelation)</option>
+                  <option value="block">Block Matrix (M x N)</option>
+                  <option value="convolutional">Convolutional (Ramsey/Forney)</option>
+                  <option value="diagonal">Diagonal Interleaver</option>
+                  <option value="pseudorandom">Pseudo-Random (PR)</option>
+                </select>
+              </label>
+              <button class="btn btn-sm btn-primary" id="btn-apply-interleaver">Re-apply Interleaver</button>
+            </div>
+            <p class="text-muted mt-2">
+              The de-interleaver reverses burst-error spreading. Supports Matrix block transpositions, Ramsey multi-branch shift registers, GSM/satellite diagonal interleaving, and LFSR pseudo-random permuters.
+            </p>
+          </div>
+          <div>
+            <h4>Interleaver Status & Period Analysis</h4>
+            <div class="callout" id="interleave-status-callout">
+              Active Mode: <strong>Bypass / None</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: FEC Decoder -->
+      <div class="tab-content" id="tab-fec">
+        <div class="grid-2-col">
+          <div>
+            <h4>Forward Error Correction (FEC) Engine</h4>
+            <div class="form-row">
+              <label>Select FEC Decoder:
+                <select id="cfg-fec">
+                  <option value="auto">Auto (Default Standard)</option>
+                  <option value="viterbi">Viterbi (Rate 1/2, K=7 CCSDS NASA)</option>
+                  <option value="rs">Reed-Solomon RS(255, 223) GF(2^8)</option>
+                  <option value="concatenated">Concatenated (RS + Viterbi)</option>
+                  <option value="ldpc">LDPC (Min-Sum Belief Propagation)</option>
+                  <option value="none">Bypass FEC</option>
+                </select>
+              </label>
+              <button class="btn btn-sm btn-primary" id="btn-apply-fec">Re-decode FEC</button>
+            </div>
+            <p class="text-muted mt-2">
+              Short-constrained Viterbi decoder with trellis maximum-likelihood path metric tracing, Reed-Solomon Berlekamp-Massey with exact GF(2⁸) Gaussian elimination error magnitude evaluation, and Tanner Graph LDPC.
+            </p>
+          </div>
+          <div>
+            <h4>FEC Decoding Results</h4>
+            <div class="callout" id="fec-results-callout">
+              FEC Status: <strong>Ready</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 5: Frame Correlation & Payload -->
+      <div class="tab-content" id="tab-framing">
+        <div class="grid-2-col">
+          <div>
+            <h4>Detected Synchronization Preambles</h4>
+            <div id="preambles-summary-list">--</div>
+            <h4 class="mt-3">Framing Table</h4>
+            <div class="table-container small-table">
+              <table class="data-table" id="table-frames">
+                <thead>
+                  <tr><th>Frame #</th><th>Bit Offset</th><th>Length</th><th>Header Hex</th><th>Entropy</th></tr>
+                </thead>
+                <tbody id="table-frames-body">
+                  <tr><td colspan="5">No frames correlated yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <div class="flex-between">
+              <h4>Recovered Payload (Hex & ASCII Inspector)</h4>
+              <button class="btn-sm btn-outline" id="btn-download-payload">Download Raw Payload</button>
+            </div>
+            <pre class="hex-editor-view" id="hex-editor-container">000000  -- -- -- -- -- -- -- --  -- -- -- -- -- -- -- --  |................|</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal: Synthetic RF Generator -->
+  <div class="modal-backdrop" id="modal-synthetic">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>⚡ Synthetic RF Signal Generator (Defense Test Bench)</h3>
+        <button class="modal-close" id="btn-close-synthetic">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Modulation Type:</label>
+            <select id="synth-mod">
+              <option value="QPSK" selected>QPSK (Quadrature PSK)</option>
+              <option value="BPSK">BPSK (Binary PSK)</option>
+              <option value="8PSK">8PSK (8-Phase PSK)</option>
+              <option value="16QAM">16-QAM (Quadrature Amplitude)</option>
+              <option value="64QAM">64-QAM</option>
+              <option value="2FSK">2-FSK (Frequency Shift Keying)</option>
+              <option value="4FSK">4-FSK</option>
+              <option value="CW">CW (Continuous Wave Carrier)</option>
+              <option value="NOISE">AWGN Thermal Noise</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>SNR Level: <span id="label-snr">20 dB</span></label>
+            <input type="range" id="synth-snr" min="-5" max="35" value="20" step="1">
+          </div>
+
+          <div class="form-group">
+            <label>Carrier Frequency Offset (CFO): <span id="label-cfo">2500 Hz</span></label>
+            <input type="range" id="synth-cfo" min="-15000" max="15000" value="2500" step="500">
+          </div>
+
+          <div class="form-group">
+            <label>Preamble / Framing Marker:</label>
+            <select id="synth-preamble">
+              <option value="CCSDS" selected>CCSDS Telemetry ASM (0x1ACFFC1D)</option>
+              <option value="BARKER_13">Barker-13 Code (0x1F35)</option>
+              <option value="BARKER_11">Barker-11 Code</option>
+              <option value="AX25">AX.25 HDLC Flag (0x7E)</option>
+              <option value="NONE">None (Raw Random)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Sampling Frequency (Fs):</label>
+            <select id="synth-fs">
+              <option value="1000000" selected>1,000,000 Hz (1.0 MHz)</option>
+              <option value="2000000">2,000,000 Hz (2.0 MHz)</option>
+              <option value="500000">500,000 Hz (500 kHz)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Symbol / Baud Rate:</label>
+            <select id="synth-rs">
+              <option value="100000" selected>100,000 Baud (100 kBaud, SPS=10)</option>
+              <option value="50000">50,000 Baud (50 kBaud, SPS=20)</option>
+              <option value="125000">125,000 Baud (SPS=8)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-synthetic">Cancel</button>
+        <button class="btn btn-primary" id="btn-submit-synthetic">Synthesize & Auto-Analyze</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: File Ingestion (.IQ / .WAV) -->
+  <div class="modal-backdrop" id="modal-upload">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📂 Ingest .IQ / .WAV / Raw Binary File</h3>
+        <button class="modal-close" id="btn-close-upload">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="upload-dropzone" id="dropzone">
+          <span class="upload-icon">📁</span>
+          <p>Drag and drop a <strong>.wav</strong>, <strong>.iq</strong>, <strong>.bin</strong>, or <strong>.raw</strong> file here</p>
+          <span class="text-muted">or click to browse files</span>
+          <input type="file" id="file-input" style="display:none" accept=".wav,.iq,.bin,.raw">
+        </div>
+        <div class="file-details mt-2" id="file-selected-name">No file selected.</div>
+
+        <div class="form-grid mt-3">
+          <div class="form-group">
+            <label>Sampling Frequency (Fs if raw .IQ):</label>
+            <input type="number" id="upload-fs" value="1000000" step="10000">
+          </div>
+          <div class="form-group">
+            <label>Binary Format Hint:</label>
+            <select id="upload-format">
+              <option value="auto">Auto-detect</option>
+              <option value="complex64">Float32 Complex (GNU Radio)</option>
+              <option value="int16">Int16 CS16 (HackRF/USRP)</option>
+              <option value="uint8">UInt8 CU8 (RTL-SDR)</option>
+              <option value="int8">Int8 CS8</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-upload">Cancel</button>
+        <button class="btn btn-primary" id="btn-submit-upload">Upload & Ingest</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
