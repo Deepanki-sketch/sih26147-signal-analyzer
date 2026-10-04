@@ -26,7 +26,8 @@ def demodulate_fsk(iq_samples: np.ndarray, sample_rate: float, symbol_rate: floa
     inst_freq = dphi * sample_rate / (2.0 * np.pi)
 
     # Lowpass filter to eliminate high-frequency discriminator spikes
-    b, a = signal.butter(4, 1.2 * symbol_rate / (sample_rate / 2.0), btype='low')
+    cutoff = np.clip(1.2 * symbol_rate / (sample_rate / 2.0), 0.01, 0.95)
+    b, a = signal.butter(4, cutoff, btype='low')
     filtered_freq = signal.filtfilt(b, a, inst_freq)
 
     # Symbol timing recovery: sample near middle of symbol period
