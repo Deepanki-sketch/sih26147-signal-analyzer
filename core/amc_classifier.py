@@ -9,8 +9,6 @@ Discriminates: BPSK, QPSK, 8PSK, 16QAM, 64QAM, 2FSK, 4FSK, CW, NOISE
 
 import numpy as np
 from scipy import signal
-from sklearn.ensemble import RandomForestClassifier
-
 CLASSES = ["BPSK", "QPSK", "8PSK", "16QAM", "64QAM", "2FSK", "4FSK", "CW", "NOISE"]
 
 
