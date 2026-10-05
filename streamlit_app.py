@@ -104,21 +104,29 @@ st.markdown("""
 
 # Initialize Session State
 if 'pipeline' not in st.session_state:
-    st.session_state.pipeline = SignalAnalysisPipeline()
+    try:
+        st.session_state.pipeline = SignalAnalysisPipeline()
+    except Exception as e:
+        st.error(f"Pipeline initialization exception: {e}")
+        st.session_state.pipeline = None
 
-if 'current_signal' not in st.session_state:
-    # Default benchmark QPSK signal
-    sig, _, _ = generate_synthetic_rf(
-        mod_type="QPSK",
-        num_symbols=3000,
-        sample_rate=1e6,
-        symbol_rate=1e5,
-        snr_db=22.0,
-        cfo_hz=2500.0,
-        preamble="CCSDS"
-    )
-    st.session_state.current_signal = sig
-    st.session_state.analysis_res = st.session_state.pipeline.process_signal(sig, manual_mod="auto")
+if 'current_signal' not in st.session_state and st.session_state.get('pipeline') is not None:
+    try:
+        sig, _, _ = generate_synthetic_rf(
+            mod_type="QPSK",
+            num_symbols=2000,
+            sample_rate=1e6,
+            symbol_rate=1e5,
+            snr_db=22.0,
+            cfo_hz=2500.0,
+            preamble="CCSDS"
+        )
+        st.session_state.current_signal = sig
+        st.session_state.analysis_res = st.session_state.pipeline.process_signal(sig, manual_mod="auto")
+    except Exception as e:
+        st.warning(f"Default benchmark signal initialization notice: {e}")
+        st.session_state.current_signal = None
+        st.session_state.analysis_res = None
 
 
 # =========================================================================
